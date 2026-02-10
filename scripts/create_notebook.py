@@ -1,0 +1,232 @@
+import json
+import os
+
+notebook_path = "notebooks/cardio_hackathon_main.ipynb"
+
+cells = []
+
+# Cell 1: Header
+cells.append({
+    "cell_type": "markdown",
+    "metadata": {},
+    "source": [
+        "# DeepMind-Inspired Cardiovascular Risk Prediction\n",
+        "\n",
+        "**Hack4Health Project**\n",
+        "\n",
+        "This notebook implements a modern, uncertainty-aware framework for heart disease prediction. Instead of standard classifiers, we leverage:\n",
+        "1. **TabPFN (Foundation Model):** A Transformer pre-trained on tabular data priors.\n",
+        "2. **Uncertainty Quantification (MC Dropout):** Bayesian-style confidence estimation.\n",
+        "3. **Concept-Bottleneck Interpretability:** Grouping features into clinical concepts (Vitals, Lifestyle) for doctor-friendly explanations.\n"
+    ]
+})
+
+# Cell 2: Imports
+cells.append({
+    "cell_type": "code",
+    "execution_count": None,
+    "metadata": {},
+    "outputs": [],
+    "source": [
+        "import sys\n",
+        "import os\n",
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "import matplotlib.pyplot as plt\n",
+        "import seaborn as sns\n",
+        "import shap\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.metrics import classification_report, roc_auc_score, roc_curve\n",
+        "\n",
+        "# Add src to path\n",
+        "sys.path.append(os.path.abspath('../src'))\n",
+        "\n",
+        "try:\n",
+        "    from utils_data import load_and_preprocess_data, get_concept_map\n",
+        "    from utils_model import get_xgboost, get_tabpfn, UncertaintyModel\n",
+        "except ImportError:\n",
+        "    print(\"Source modules not found. Ensure you are running this from the 'notebooks' directory and 'src' exists.\")\n"
+    ]
+})
+
+# Cell 3: Data Load
+cells.append({
+    "cell_type": "code",
+    "execution_count": None,
+    "metadata": {},
+    "outputs": [],
+    "source": [
+        "# Load Data\n",
+        "# We use the 'heart_processed.csv' dataset which contains rich clinical features\n",
+        "DATA_PATH_PROC = '../Data/Heart Attack/heart_processed.csv'\n",
+        "DATA_PATH_BASE = '../Data/Cardiac Failure/cardio_base.csv'\n",
+        "\n",
+        "# Toggle 'DATA_PATH_BASE' to None if you want only the high-fidelity set.\n",
+        "X, y, concept_map = load_and_preprocess_data(DATA_PATH_PROC, base_path=DATA_PATH_BASE)\n",
+        "\n",
+        "print(\"Concepts Defined:\", list(concept_map.keys()))\n",
+        "\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n",
+        "print(f\"Training Data Shape: {X_train.shape}\")\n",
+        "print(f\"Testing Data Shape: {X_test.shape}\")\n"
+    ]
+})
+
+# Cell 4: Config
+cells.append({
+    "cell_type": "code",
+    "execution_count": None,
+    "metadata": {},
+    "outputs": [],
+    "source": [
+        "# Configuration\n",
+        "sns.set_style(\"whitegrid\")\n",
+        "plt.rcParams['font.size'] = 12\n"
+    ]
+})
+
+# Cell 5: Baseline XGBoost
+cells.append({
+    "cell_type": "markdown",
+    "metadata": {},
+    "source": ["## 1. Baseline Model: XGBoost\n", "The industry standard for tabular data."]
+})
+
+cells.append({
+    "cell_type": "code",
+    "execution_count": None,
+    "metadata": {},
+    "outputs": [],
+    "source": [
+        "xgb_model = get_xgboost()\n",
+        "xgb_model.fit(X_train, y_train)\n",
+        "\n",
+        "y_pred_xgb = xgb_model.predict(X_test)\n",
+        "print(\"=== XGBoost Classification Report ===\")\n",
+        "print(classification_report(y_test, y_pred_xgb))\n"
+    ]
+})
+
+# Cell 6: TabPFN
+cells.append({
+    "cell_type": "markdown",
+    "metadata": {},
+    "source": ["## 2. Novel Model: TabPFN (Transformer)\n", "A Prior-Data Fitted Network that typically generalizes better on small, complex medical datasets without tuning."]
+})
+
+cells.append({
+    "cell_type": "code",
+    "execution_count": None,
+    "metadata": {},
+    "outputs": [],
+    "source": [
+        "print(\"Fitting TabPFN (Pre-trained foundation model)...\")\n",
+        "tabpfn_model = get_tabpfn()\n",
+        "tabpfn_model.fit(X_train, y_train)\n",
+        "\n",
+        "y_pred_tab = tabpfn_model.predict(X_test)\n",
+        "print(\"=== TabPFN Classification Report ===\")\n",
+        "print(classification_report(y_test, y_pred_tab))\n"
+    ]
+})
+
+# Cell 7: Uncertainty
+cells.append({
+    "cell_type": "markdown",
+    "metadata": {},
+    "source": ["## 3. Uncertainty Quantification (MC Dropout)\n", "Medical AI requires knowing *when* the model is unsure. We use Monte Carlo Dropout to generate Bayesian confidence intervals."]
+})
+
+cells.append({
+    "cell_type": "code",
+    "execution_count": None,
+    "metadata": {},
+    "outputs": [],
+    "source": [
+        "print(\"Training Uncertainty-Aware Network...\")\n",
+        "unc_model = UncertaintyModel(epochs=500, lr=0.005)\n",
+        "unc_model.fit(X_train, y_train)\n",
+        "\n",
+        "mean_preds, std_preds = unc_model.predict_uncertainty(X_test, n_samples=100)\n",
+        "\n",
+        "# Visualize\n",
+        "plt.figure(figsize=(10, 6))\n",
+        "sc = plt.scatter(mean_preds, std_preds, c=y_test, cmap='coolwarm', alpha=0.6, edgecolors='k')\n",
+        "plt.axhline(0, color='gray', linestyle='--')\n",
+        "plt.xlabel('Predicted Risk (Probability)')\n",
+        "plt.ylabel('Model Uncertainty (Std Dev)')\n",
+        "plt.title('Risk vs. Confidence (DeepMind-Style)')\n",
+        "plt.colorbar(sc, label='Actual Heart Disease (1=Yes)')\n",
+        "plt.text(0.5, max(std_preds)*0.9, 'High Uncertainty Zone', ha='center', color='red')\n",
+        "plt.show()\n"
+    ]
+})
+
+# Cell 8: Interpretability
+cells.append({
+    "cell_type": "markdown",
+    "metadata": {},
+    "source": ["## 4. Concept-Based Interpretability\n", "Instead of raw feature importance, we explain risk in terms of clinical concepts."]
+})
+
+cells.append({
+    "cell_type": "code",
+    "execution_count": None,
+    "metadata": {},
+    "outputs": [],
+    "source": [
+        "# Calculate SHAP values for Baseline (XGBoost)\n",
+        "explainer = shap.TreeExplainer(xgb_model)\n",
+        "shap_values = explainer.shap_values(X_test)\n",
+        "\n",
+        "# Aggregate by Concept\n",
+        "concept_importance = pd.DataFrame(index=X_test.index)\n",
+        "abs_shap = np.abs(shap_values)\n",
+        "\n",
+        "for concept, features in concept_map.items():\n",
+        "    # Find column indices for this concept\n",
+        "    indices = [X_test.columns.get_loc(f) for f in features if f in X_test.columns]\n",
+        "    if indices:\n",
+        "        # Sum absolute SHAP values for these features\n",
+        "        concept_importance[concept] = abs_shap[:, indices].sum(axis=1)\n",
+        "\n",
+        "# Plot Mean Importance\n",
+        "plt.figure(figsize=(10, 5))\n",
+        "sns.barplot(data=concept_importance, ci=None, palette=\"viridis\")\n",
+        "plt.title(\"Driver of Risk by Clinical Concept\")\n",
+        "plt.ylabel(\"Mean Corrective Impact (SHAP magnitude)\")\n",
+        "plt.show()\n",
+        "\n",
+        "print(\"This plot tells the doctor: 'Is the patient's risk driven by their Vitals, their Lifestyle, or Demographics?'\")\n"
+    ]
+})
+
+notebook_json = {
+    "cells": cells,
+    "metadata": {
+        "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3"
+        },
+        "language_info": {
+            "codemirror_mode": {
+                "name": "ipython",
+                "version": 3
+            },
+            "file_extension": ".py",
+            "mimetype": "text/x-python",
+            "name": "python",
+            "nbconvert_exporter": "python",
+            "pygments_lexer": "ipython3",
+            "version": "3.8.5"
+        }
+    },
+    "nbformat": 4,
+    "nbformat_minor": 4
+}
+
+with open(notebook_path, 'w', encoding='utf-8') as f:
+    json.dump(notebook_json, f, indent=2)
+
+print(f"Notebook created at {notebook_path}")
