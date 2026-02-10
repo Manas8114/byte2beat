@@ -1,10 +1,5 @@
 # 🫀 DeepMind-Inspired Cardiac Risk Assessment
 
-> **Winner: Hack4Health 2026** (hopefully!)  
-> *Trustworthy AI that knows when it doesn't know.*
-
----
-
 ## 🚀 Quick Start (One-Click Run)
 
 ### Windows
