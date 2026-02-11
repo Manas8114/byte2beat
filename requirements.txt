@@ -12,3 +12,7 @@ streamlit-lottie==0.0.5
 requests==2.32.3
 shap==0.46.0
 pytest==8.4.0
+fastapi>=0.115.0
+uvicorn>=0.34.0
+pydantic>=2.10.0
+python-multipart>=0.0.20

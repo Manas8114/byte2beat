@@ -41,7 +41,7 @@ def retrain_light():
     try:
         unc_model = UncertaintyModel(epochs=50, lr=0.01) 
         unc_model.fit(X_train, y_train)
-        joblib.dump(unc_model, f'{models_dir}/unc_model.pkl')
+        joblib.dump(unc_model, f'{models_dir}/uncertainty_model.pkl')
     except Exception as e:
          print(f"UNC Failed: {e}")
 

@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uncertaintyml"
+version = "0.1.0"
+description = "Uncertainty-aware medical risk assessment framework"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Byte2Beat Team"},
+]
+keywords = ["medical-ai", "uncertainty", "tabpfn", "bayesian", "clinical"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scikit-learn>=1.3",
+    "torch>=2.0",
+    "xgboost>=2.0",
+    "joblib>=1.3",
+    "shap>=0.42",
+]
+
+[project.optional-dependencies]
+tabpfn = ["tabpfn>=2.0", "huggingface_hub>=0.20"]
+api = ["fastapi>=0.100", "uvicorn>=0.24", "pydantic>=2.0", "python-multipart>=0.0.6"]
+dashboard = ["streamlit>=1.30", "plotly>=5.0", "streamlit-lottie>=0.0.5", "requests>=2.30"]
+dev = ["pytest>=8.0", "ruff>=0.3"]
+all = ["uncertaintyml[tabpfn,api,dashboard,dev]"]
+
+[project.scripts]
+uncertaintyml = "uncertaintyml.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/byte2beat/uncertaintyml"
+Documentation = "https://github.com/byte2beat/uncertaintyml#readme"
+Repository = "https://github.com/byte2beat/uncertaintyml"
+
+[tool.setuptools.packages.find]
+include = ["uncertaintyml*", "api*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

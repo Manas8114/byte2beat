@@ -21,7 +21,7 @@ try:
     xgb = joblib.load('models/xgb_model.pkl')
     print(f"XGBoost Loaded. Memory: {check_memory():.2f} MB")
     
-    unc_model = joblib.load('models/unc_model.pkl')
+    unc_model = joblib.load('models/uncertainty_model.pkl')
     print(f"Uncertainty Loaded. Memory: {check_memory():.2f} MB")
     
 except Exception as e:

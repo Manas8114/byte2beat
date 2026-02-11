@@ -5,15 +5,20 @@ import numpy as np
 import torch
 import joblib
 
-# Add src to path
+# Add project root and src to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath('src'))
-from utils_model import UncertaintyModel
+
+try:
+    from uncertaintyml.models import UncertaintyModel
+except ImportError:
+    from utils_model import UncertaintyModel
 
 def test_trust_mechanics():
     print("🧪 Starting Trust Test (Safety Check)...")
     
     # Load Model
-    model_path = 'models/unc_model.pkl'
+    model_path = 'models/uncertainty_model.pkl'
     if not os.path.exists(model_path):
         print(f"❌ Error: Model not found at {model_path}. Run 'run_experiment.py' first.")
         return False

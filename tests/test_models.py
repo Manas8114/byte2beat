@@ -9,10 +9,14 @@ import numpy as np
 import pandas as pd
 import joblib
 
-# Add src to path
+# Add project root and src to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from utils_model import UncertaintyModel, get_xgboost
+try:
+    from uncertaintyml.models import UncertaintyModel, get_xgboost
+except ImportError:
+    from utils_model import UncertaintyModel, get_xgboost
 
 
 class TestXGBoostModel:
@@ -66,7 +70,7 @@ class TestUncertaintyModel:
     @pytest.fixture
     def trained_model(self):
         """Load pre-trained uncertainty model."""
-        model_path = 'models/unc_model.pkl'
+        model_path = 'models/uncertainty_model.pkl'
         if not os.path.exists(model_path):
             pytest.skip("Uncertainty model not found. Run run_experiment.py first.")
         return joblib.load(model_path)
@@ -129,7 +133,7 @@ class TestModelConsistency:
         """Test that all required model files exist."""
         required_files = [
             'models/xgb_model.pkl',
-            'models/unc_model.pkl',
+            'models/uncertainty_model.pkl',
             'models/X_test.pkl',
             'models/y_test.pkl'
         ]

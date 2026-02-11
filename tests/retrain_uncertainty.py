@@ -41,8 +41,8 @@ def retrain_uncertainty():
         # Save
         models_dir = 'models'
         os.makedirs(models_dir, exist_ok=True)
-        joblib.dump(unc_model, f'{models_dir}/unc_model.pkl')
-        print(f"✅ Saved model to {models_dir}/unc_model.pkl")
+        joblib.dump(unc_model, f'{models_dir}/uncertainty_model.pkl')
+        print(f"✅ Saved model to {models_dir}/uncertainty_model.pkl")
         
     except Exception as e:
         print(f"❌ Training Failed: {e}")

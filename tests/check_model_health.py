@@ -65,7 +65,7 @@ def check_health():
     # utils_data.load_and_preprocess returns 'X' which is numeric but not StandardScaled.
     # So X_test is numeric. 'UncertaintyModel' will scale it internally. Correct.
     try:
-        unc_model_path = 'models/unc_model.pkl'
+        unc_model_path = 'models/uncertainty_model.pkl'
         if os.path.exists(unc_model_path):
             unc_model = joblib.load(unc_model_path)
             

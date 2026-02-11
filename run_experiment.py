@@ -11,12 +11,18 @@ import joblib
 import json
 from datetime import datetime
 
-# Add src to path
+# Add project root and src to path
+sys.path.insert(0, os.path.abspath('.'))
 sys.path.append(os.path.abspath('src'))
 
-from utils_data import load_and_preprocess_data, get_concept_map
-from utils_model import get_xgboost, get_tabpfn, UncertaintyModel
-from evaluation import run_full_evaluation, save_evaluation_results, compute_calibration_data
+try:
+    from uncertaintyml.data import load_and_preprocess_data, get_concept_map
+    from uncertaintyml.models import get_xgboost, get_tabpfn, UncertaintyModel
+    from uncertaintyml.evaluation import run_full_evaluation, save_evaluation_results, compute_calibration_data
+except ImportError:
+    from utils_data import load_and_preprocess_data, get_concept_map
+    from utils_model import get_xgboost, get_tabpfn, UncertaintyModel
+    from evaluation import run_full_evaluation, save_evaluation_results, compute_calibration_data
 
 try:
     from huggingface_hub import login
@@ -155,8 +161,8 @@ def main():
             print(f"  ✅ Saved: tabpfn_model.pkl")
             
         if unc_model:
-            joblib.dump(unc_model, f'{models_dir}/unc_model.pkl')
-            print(f"  ✅ Saved: unc_model.pkl")
+            joblib.dump(unc_model, f'{models_dir}/uncertainty_model.pkl')
+            print(f"  ✅ Saved: uncertainty_model.pkl")
             
         joblib.dump(X_test, f'{models_dir}/X_test.pkl')
         joblib.dump(y_test, f'{models_dir}/y_test.pkl')

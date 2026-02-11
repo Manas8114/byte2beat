@@ -1,12 +1,11 @@
 {
   "version": "2.0.0",
-  "trained_at": "2026-02-09T14:50:08.577892",
+  "trained_at": "2026-02-11T21:35:46.404124",
   "n_samples": 70918,
   "n_features": 21,
   "best_auc": 0.7986768463955333,
   "models_trained": [
     "xgboost",
-    "tabpfn",
     "uncertainty"
   ]
 }

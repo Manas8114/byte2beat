@@ -2,8 +2,12 @@ import streamlit as st
 import sys
 import os
 
-# Robustly add 'src' to path relative to this script file
+# Add project root to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Robustly add 'src' to path as fallback
 src_path = os.path.join(current_dir, 'src')
 if src_path not in sys.path:
     sys.path.append(src_path)
@@ -148,7 +152,7 @@ def load_assets():
     try:
         xgb = joblib.load(f'{models_dir}/xgb_model.pkl')
         tabpfn = joblib.load(f'{models_dir}/tabpfn_model.pkl')
-        unc_model = joblib.load(f'{models_dir}/unc_model.pkl')
+        unc_model = joblib.load(f'{models_dir}/uncertainty_model.pkl')
         X_test = joblib.load(f'{models_dir}/X_test.pkl')
         y_test = joblib.load(f'{models_dir}/y_test.pkl')
         
