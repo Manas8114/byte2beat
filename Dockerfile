@@ -1,31 +1,38 @@
-# UncertaintyML Platform
-# Multi-stage Dockerfile: api | dashboard
+# Build stage
+FROM python:3.10-slim as builder
 
-# ─── Base ───
-FROM python:3.10-slim AS base
 WORKDIR /app
 
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
-    build-essential curl \
+    build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Final stage
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy app code
 COPY . .
-RUN mkdir -p models
+
+# Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
-# ─── API target ───
-FROM base AS api
+# Expose ports
 EXPOSE 8000
-HEALTHCHECK CMD curl --fail http://localhost:8000/health || exit 1
-CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000"]
-
-# ─── Dashboard target ───
-FROM base AS dashboard
 EXPOSE 8501
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
-ENV STREAMLIT_SERVER_PORT=8501
-ENV STREAMLIT_SERVER_HEADLESS=true
-ENV STREAMLIT_SERVER_ENABLE_CORS=false
-CMD ["streamlit", "run", "dashboard.py", "--server.address=0.0.0.0"]
+
+# Default command (overridden by docker-compose)
+CMD ["python", "run_experiment.py"]

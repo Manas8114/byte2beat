@@ -42,6 +42,12 @@ class PipelineConfig:
     use_cache: bool = True
     cache_max_size: int = 10000
     cache_ttl_seconds: int = 3600
+    cache_type: str = "memory"
+    redis_url: Optional[str] = field(default_factory=lambda: os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+    
+    # Conformal settings
+    calibration_size: float = 0.15  # Reserve 15% of training data for calibration
+    conformal_alpha: float = 0.1    # 90% confidence target
 
     # Smart routing
     fast_path_threshold: float = 0.85
@@ -62,6 +68,7 @@ class UncertaintyPipeline:
         self.config = config or PipelineConfig()
         self.registry = ModelRegistry()
         self.trained_models: Dict[str, object] = {}
+        self.conformal_models: Dict[str, Any] = {}  # Map: model_name -> ConformalCalibrator
         self.eval_results: Dict = {}
         self.concept_bottleneck: Optional[ConceptBottleneck] = None
         self.narrative_engine: Optional[NarrativeEngine] = None
@@ -72,6 +79,8 @@ class UncertaintyPipeline:
             self._cache = PredictionCache(
                 max_size=self.config.cache_max_size,
                 ttl_seconds=self.config.cache_ttl_seconds,
+                cache_type=self.config.cache_type,
+                redis_url=self.config.redis_url
             )
 
     def train(self, X: pd.DataFrame, y: pd.Series, concept_map: Dict = None) -> Dict:
@@ -82,6 +91,7 @@ class UncertaintyPipeline:
             Dict with evaluation results for each model.
         """
         from sklearn.model_selection import train_test_split
+        from uncertaintyml.conformal import ConformalCalibrator
 
         # Setup interpretability
         if concept_map:
@@ -97,6 +107,17 @@ class UncertaintyPipeline:
             random_state=self.config.random_state,
             stratify=y,
         )
+        
+        # Split remaining training data for calibration if needed
+        X_train_final, X_cal, y_train_final, y_cal = train_test_split(
+            X_train, y_train, 
+            test_size=self.config.calibration_size, 
+            random_state=self.config.random_state, 
+            stratify=y_train
+        )
+        # Re-assign for evaluation consistency
+        X_train = X_train_final
+        y_train = y_train_final
         self.X_test = X_test
         self.y_test = y_test
 
@@ -129,6 +150,11 @@ class UncertaintyPipeline:
                         X_train_sub, y_train_sub = X_train, y_train
                     model.fit(X_train_sub, y_train_sub)
                     self.trained_models[model_name] = model
+                    
+                    # Calibrate
+                    cal = ConformalCalibrator(model, method="score", cv="prefit")
+                    cal.fit(X_cal, y_cal)
+                    self.conformal_models[model_name] = cal
                     eval_result = run_full_evaluation(model, X_test, y_test, model_name=model_name)
                     all_results["models"][model_name] = eval_result
                     print(f"  ✅ AUC: {eval_result['auc']:.4f}")
@@ -138,6 +164,11 @@ class UncertaintyPipeline:
 
                 model.fit(X_train, y_train)
                 self.trained_models[model_name] = model
+
+                # Calibrate
+                cal = ConformalCalibrator(model, method="score", cv="prefit")
+                cal.fit(X_cal, y_cal)
+                self.conformal_models[model_name] = cal
 
                 # Evaluate
                 if model_name == "uncertainty":
@@ -170,6 +201,47 @@ class UncertaintyPipeline:
 
         return all_results
 
+    def _align_features(self, model, X: pd.DataFrame) -> pd.DataFrame:
+        """Align features to model's expected order if available."""
+        target_features = getattr(model, "feature_names_in_", None)
+        
+        # If model doesn't have features, try to find a reference model that does
+        if target_features is None:
+            for m in self.trained_models.values():
+                if hasattr(m, "feature_names_in_"):
+                    target_features = m.feature_names_in_
+                    break
+        
+        if target_features is not None:
+            # Check if all features exist
+            missing = set(target_features) - set(X.columns)
+            if not missing:
+                 return X[target_features]
+        
+        return X
+
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict:
+        """Run full evaluation suite."""
+        self.X_test = X_test
+        self.y_test = y_test
+
+        results = {}
+        for name, model in self.trained_models.items():
+            try:
+                X_aligned = self._align_features(model, X_test)
+                results[name] = run_full_evaluation(model, X_aligned, y_test, model_name=name)
+            except Exception as e:
+                print(f"Error evaluating {name}: {e}")
+
+        # Add Conformal Metrics
+        results["conformal"] = {}
+        for name, cal in self.conformal_models.items():
+            X_aligned = self._align_features(cal.estimator, X_test)
+            results["conformal"][name] = cal.evaluate(X_aligned, y_test, alpha=self.config.conformal_alpha)
+
+        self.eval_results = results
+        return results
+
     def predict(self, patient_data: pd.DataFrame, model_name: str = "uncertainty") -> Dict:
         """
         Predict risk for a patient with uncertainty and narrative explanation.
@@ -188,6 +260,9 @@ class UncertaintyPipeline:
 
         if isinstance(patient_data, pd.Series):
             patient_data = patient_data.to_frame().T
+        
+        # Align features
+        patient_data = self._align_features(model, patient_data)
 
         # --- Cache lookup ---
         cache_key = None
@@ -251,6 +326,16 @@ class UncertaintyPipeline:
             "route_taken": route_taken,
         }
 
+        # 3. Conformal Prediction Set
+        if model_name in self.conformal_models:
+             _, y_sets = self.conformal_models[model_name].predict(patient_data, alpha=self.config.conformal_alpha)
+             # y_sets is boolean array (n_samples, n_classes). True -> in set.
+             # We want list of indices.
+             if y_sets.ndim == 2:
+                 in_set = [i for i, is_in in enumerate(y_sets[0]) if is_in]
+                 result["conformal_set"] = in_set
+                 result["conformal_alpha"] = self.config.conformal_alpha
+
         # --- Cache store ---
         if self._cache is not None and cache_key is not None:
             self._cache.put(cache_key, result)
@@ -266,6 +351,9 @@ class UncertaintyPipeline:
             path = os.path.join(output_dir, f"{name}_model.pkl")
             joblib.dump(model, path)
             print(f"  ✅ Saved: {path}")
+
+        for name, cal in self.conformal_models.items():
+            joblib.dump(cal, os.path.join(output_dir, f"{name}_conformal.pkl"))
 
         if self.X_test is not None:
             joblib.dump(self.X_test, os.path.join(output_dir, "X_test.pkl"))
@@ -299,6 +387,13 @@ class UncertaintyPipeline:
                     pipe.trained_models[name] = joblib.load(os.path.join(models_dir, f))
                 except Exception as e:
                     warnings.warn(f"Could not load model '{name}' from {f}: {e}")
+            
+            if f.endswith("_conformal.pkl"):
+                name = f.replace("_conformal.pkl", "")
+                try:
+                    pipe.conformal_models[name] = joblib.load(os.path.join(models_dir, f))
+                except Exception as e:
+                    warnings.warn(f"Could not load conformal '{name}': {e}")
 
         x_path = os.path.join(models_dir, "X_test.pkl")
         y_path = os.path.join(models_dir, "y_test.pkl")

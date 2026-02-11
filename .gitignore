@@ -37,6 +37,13 @@ wheels/
 Data/
 results.txt
 
+# Models
+models/*.pkl
+*.pkl
+
+# Logs
+*.log
+
 # IDEs
 .vscode/
 .idea/
