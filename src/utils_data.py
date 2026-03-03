@@ -11,12 +11,13 @@ def get_concept_map():
         "Vitals": ["RestingBP", "Cholesterol", "FastingBS", "MaxHR", "Glucose"],
         "Lifestyle": ["Smoke", "Alcohol", "Active"],
         "Clinical": [
-            "Oldpeak", 
+            "Pre-existing Conditions", "Oldpeak", 
             "ChestPainType_ATA", "ChestPainType_NAP", "ChestPainType_TA", "ChestPainType_ASY", 
             "RestingECG_Normal", "RestingECG_ST", "RestingECG_LVH",
             "ExerciseAngina_Y", 
             "ST_Slope_Flat", "ST_Slope_Up", "ST_Slope_Down"
-        ]
+        ],
+        "Pre-existing Conditions": ["Hypertension", "Diabetes"]
     }
 
 def load_cardio_base(filepath):
@@ -113,12 +114,27 @@ def load_and_preprocess_data(processed_path, base_path=None):
                     df_final[col] = df_final[col].fillna(df_final[col].median())
                 else:
                     df_final[col] = df_final[col].fillna(df_final[col].mode().iloc[0] if not df_final[col].mode().empty else 0) 
-            
+                    
         except Exception as e:
             print(f"Warning: Could not merge cardio_base.csv: {e}")
             df_final = df_proc
     else:
         df_final = df_proc
+
+    # Engineer Pre-existing Conditions
+    if 'RestingBP' in df_final.columns:
+        df_final['Hypertension'] = (df_final['RestingBP'] > 130).astype(int)
+    else:
+        df_final['Hypertension'] = 0
+        
+    if 'FastingBS' in df_final.columns and 'Glucose' in df_final.columns:
+        df_final['Diabetes'] = ((df_final['FastingBS'] == 1) | (df_final['Glucose'] > 125)).astype(int)
+    elif 'FastingBS' in df_final.columns:
+         df_final['Diabetes'] = (df_final['FastingBS'] == 1).astype(int)
+    elif 'Glucose' in df_final.columns:
+         df_final['Diabetes'] = (df_final['Glucose'] > 125).astype(int)
+    else:
+         df_final['Diabetes'] = 0
 
     if 'HeartDisease' not in df_final.columns:
         raise ValueError("Target 'HeartDisease' missing.")

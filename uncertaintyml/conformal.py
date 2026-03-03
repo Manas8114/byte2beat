@@ -57,7 +57,7 @@ class ConformalCalibrator:
         """
         if not self.mapie or not self.calibrated:
             # Fallback: return point prediction and empty sets
-            if hasattr(self.mapie, "estimator"):
+            if hasattr(self, "mapie") and self.mapie and hasattr(self.mapie, "estimator"):
                 return self.mapie.estimator.predict(X), np.zeros((len(X), 2), dtype=bool)
             return np.zeros(len(X)), np.zeros((len(X), 2), dtype=bool)
 

@@ -25,9 +25,12 @@ class TestXGBoostModel:
     @pytest.fixture
     def trained_model(self):
         """Load pre-trained XGBoost model."""
-        model_path = 'models/xgb_model.pkl'
+        model_path = 'models/xgboost_model.pkl'
         if not os.path.exists(model_path):
-            pytest.skip("XGBoost model not found. Run run_experiment.py first.")
+            # Fallback for older runs
+            model_path = 'models/xgb_model.pkl'
+            if not os.path.exists(model_path):
+                pytest.skip("XGBoost model not found. Run run_experiment.py first.")
         return joblib.load(model_path)
     
     @pytest.fixture
@@ -132,13 +135,16 @@ class TestModelConsistency:
     def test_models_exist(self):
         """Test that all required model files exist."""
         required_files = [
-            'models/xgb_model.pkl',
+            'models/xgboost_model.pkl',
             'models/uncertainty_model.pkl',
             'models/X_test.pkl',
             'models/y_test.pkl'
         ]
         
         for f in required_files:
+            if f == 'models/xgboost_model.pkl' and not os.path.exists(f):
+                # Fallback check
+                f = 'models/xgb_model.pkl'
             assert os.path.exists(f), f"Missing required file: {f}"
     
     def test_test_data_shape_matches_models(self):

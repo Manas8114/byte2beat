@@ -96,8 +96,12 @@ def predict(patient: PatientInput):
     patient_df = pd.DataFrame([patient.model_dump()])
 
     model_name = _select_model(pipe)
-    result = pipe.predict(patient_df, model_name=model_name)
-    return PredictionResponse(**result)
+    
+    try:
+        result = pipe.predict(patient_df, model_name=model_name)
+        return PredictionResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
 
 
 @app.post("/batch", response_model=BatchPredictionResponse)
@@ -140,6 +144,10 @@ async def batch_predict(file: UploadFile = File(...)):
         high_risk_count=sum(1 for r in risks if r > 50),
         low_confidence_count=sum(1 for u in uncertainties if u > 20),
     )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    return {"error": str(exc), "status": 500}
 
 
 def _select_model(pipe) -> str:

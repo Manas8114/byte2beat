@@ -90,6 +90,13 @@ class HeartDiseaseAdapter(DatasetAdapter):
 
         y = df_final["HeartDisease"]
         X = df_final.drop(columns=["HeartDisease"])
+
+        # Feature engineering: interaction features
+        if 'Age' in X.columns and 'Cholesterol' in X.columns:
+            X['Age_x_Cholesterol'] = X['Age'] * X['Cholesterol'] / 100.0
+        if 'RestingBP' in X.columns and 'MaxHR' in X.columns:
+            X['BP_HR_ratio'] = X['RestingBP'] / (X['MaxHR'] + 1e-6)
+
         return X, y, self.get_concept_map()
 
     @staticmethod

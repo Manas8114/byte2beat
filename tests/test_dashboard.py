@@ -131,8 +131,8 @@ class TestEvalMetrics:
         with open(filepath, 'r') as f:
             data = json.load(f)
         
-        assert 'models' in data
-        assert 'timestamp' in data
+        assert 'xgboost' in data
+        assert 'uncertainty' in data
     
     def test_model_info_file_exists(self):
         """Test that model_info.json exists after training."""

@@ -1,6 +1,6 @@
 """
-End-to-End Experiment Runner for UncertaintyML.
-Now uses the production-grade UncertaintyPipeline for full integration testing.
+End-to-End Experiment Runner for UncertaintyML applied to Stroke Dataset.
+Uses the production-grade UncertaintyPipeline.
 """
 
 import sys
@@ -13,21 +13,19 @@ import numpy as np
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from uncertaintyml.pipeline import PipelineConfig, UncertaintyPipeline
-from uncertaintyml.data import load_and_preprocess_data
+from uncertaintyml.adapters.stroke import StrokeAdapter
 from uncertaintyml.evaluation import cross_validate_model
 
 def main():
     print("=" * 60)
-    print("🚀 UncertaintyML: End-to-End Experiment Pipeline")
+    print("🚀 UncertaintyML: End-to-End Stroke Experiment Pipeline")
     print("=" * 60)
 
     # 1. Load Data
     print("\n[1/4] Loading Data...")
     try:
-        X, y, concept_map = load_and_preprocess_data(
-            'Data/Heart Attack/heart_processed.csv', 
-            base_path='Data/Cardiac Failure/cardio_base.csv'
-        )
+        adapter = StrokeAdapter()
+        X, y, concept_map = adapter.load('Data/Stroke/stroke_dataset.csv')
         print(f"✅ Loaded {len(X)} samples, {X.shape[1]} features")
     except Exception as e:
         print(f"❌ Data load failed: {e}")
@@ -36,14 +34,14 @@ def main():
     # 2. Configure Pipeline
     print("\n[2/4] Configuring Pipeline...")
     config = PipelineConfig(
-        models_to_train=["xgboost", "uncertainty"], # TabPFN optional/slow
-        uncertainty_epochs=20,      # Fast run
+        models_to_train=["xgboost", "uncertainty"], 
+        uncertainty_epochs=20,      
         uncertainty_lr=0.005,
         mc_samples=10,
         dropout_rate=0.3,
         test_size=0.2,
-        calibration_size=0.15,      # For Conformal Prediction
-        output_dir="models",
+        calibration_size=0.15,      
+        output_dir="models_stroke", # Save to new dir
         use_cache=True,
         cache_type="memory"
     )
@@ -51,9 +49,8 @@ def main():
     pipeline = UncertaintyPipeline(config)
 
     # 3. Train & Evaluate
-    print("\n[3/4] Training Pipeline (including Conformal Calibration)...")
+    print("\n[3/4] Training Pipeline...")
     try:
-        # train() handles splitting, training, calibrating, and initial eval
         results = pipeline.train(X, y, concept_map)
         print("✅ Training Complete.")
         print(f"Models trained: {results['models']}")
@@ -62,12 +59,6 @@ def main():
         print("\nRunning Evaluation...")
         eval_results = pipeline.evaluate(pipeline.X_test, pipeline.y_test)
         
-        # specific check for Conformal
-        if "conformal" in eval_results:
-             print("\nConformal Prediction Metrics:")
-             for m, metrics in eval_results["conformal"].items():
-                 print(f"  {m}: Coverage={metrics.get('coverage')}, Width={metrics.get('avg_set_size')}")
-
     except Exception as e:
         print(f"❌ Training failed: {e}")
         import traceback
@@ -82,10 +73,10 @@ def main():
     except Exception as e:
          print(f"❌ Save failed: {e}")
 
+    # 5. Cross-Validation
     print("\n[5/5] Cross-Validation & Overfitting Check...")
     try:
         import xgboost as xgb
-        print("  Running 5-fold Stratified CV on XGBoost...")
         cv_results = cross_validate_model(
             xgb.XGBClassifier,
             X, y, n_splits=5,
@@ -96,10 +87,8 @@ def main():
         )
         print(f"  CV AUC: {cv_results['mean_auc']:.4f} ± {cv_results['std_auc']:.4f}")
         print(f"  CV Acc: {cv_results['mean_acc']:.4f} ± {cv_results['std_acc']:.4f}")
-        print(f"  CV ECE: {cv_results['mean_ece']:.4f}")
-        
         if cv_results['std_auc'] > 0.05:
-            print("  [!] HIGH VARIANCE across folds — model may be unstable")
+            print("  [!] HIGH VARIANCE across folds")
         else:
             print("  [OK] Fold variance is healthy")
     except Exception as e:

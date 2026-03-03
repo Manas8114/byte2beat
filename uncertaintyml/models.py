@@ -109,13 +109,22 @@ class UncertaintyModel(BaseEstimator, ClassifierMixin):
             self.model = self.model.to(self.device)
 
     def fit(self, X, y):
-        """Train the MC Dropout network with GPU acceleration."""
+        """Train the MC Dropout network with early stopping on validation loss."""
         X_arr = X.values if hasattr(X, "values") else X
         y_arr = y.values if hasattr(y, "values") else y
 
         X_scaled = self.scaler.fit_transform(X_arr)
-        X_tensor = torch.FloatTensor(X_scaled).to(self.device)
-        y_tensor = torch.FloatTensor(y_arr).reshape(-1, 1).to(self.device)
+
+        # Split 10% for validation-based early stopping
+        from sklearn.model_selection import train_test_split
+        X_train_sc, X_val_sc, y_train_sc, y_val_sc = train_test_split(
+            X_scaled, y_arr, test_size=0.1, random_state=42, stratify=y_arr
+        )
+
+        X_tensor = torch.FloatTensor(X_train_sc).to(self.device)
+        y_tensor = torch.FloatTensor(y_train_sc).reshape(-1, 1).to(self.device)
+        X_val_tensor = torch.FloatTensor(X_val_sc).to(self.device)
+        y_val_tensor = torch.FloatTensor(y_val_sc).reshape(-1, 1).to(self.device)
 
         self.model = MCDropoutNetwork(
             X_arr.shape[1],
@@ -123,19 +132,60 @@ class UncertaintyModel(BaseEstimator, ClassifierMixin):
             dropout_rate=self.dropout_rate,
         ).to(self.device)
 
-        optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
-        criterion = nn.BCELoss()
+        optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=1e-4)
+
+        # Class-weighted BCE for imbalanced data
+        pos_count = float(y_train_sc.sum())
+        neg_count = float(len(y_train_sc) - pos_count)
+        pos_weight_val = neg_count / max(pos_count, 1.0)
+        # Build per-sample weight tensor for training
+        sample_weights = torch.where(
+            y_tensor == 1.0,
+            torch.tensor(pos_weight_val, device=self.device),
+            torch.tensor(1.0, device=self.device),
+        )
+        criterion = nn.BCELoss(reduction='none')  # per-sample loss
+        val_criterion = nn.BCELoss()
+
+        # Early stopping state
+        best_val_loss = float('inf')
+        best_state_dict = None
+        patience_counter = 0
+        train_patience = 15
 
         self.model.train()
-        for _ in range(self.epochs):
+        for epoch in range(self.epochs):
             optimizer.zero_grad()
             out = self.model(X_tensor)
-            loss = criterion(out, y_tensor)
+            # Weighted BCE: apply class weights per sample
+            per_sample_loss = criterion(out, y_tensor)
+            loss = (per_sample_loss * sample_weights).mean()
             loss.backward()
             optimizer.step()
+
+            # Validation loss (eval mode for no dropout)
+            self.model.eval()
+            with torch.no_grad():
+                val_out = self.model(X_val_tensor)
+                val_loss = val_criterion(val_out, y_val_tensor).item()
+            self.model.train()
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_state_dict = {k: v.clone() for k, v in self.model.state_dict().items()}
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= train_patience:
+                    break
+
+        # Restore best weights
+        if best_state_dict is not None:
+            self.model.load_state_dict(best_state_dict)
+
         return self
 
-    def predict_uncertainty(self, X, n_samples: int = None) -> Tuple[np.ndarray, np.ndarray]:
+    def predict_uncertainty(self, X, n_samples: int = None, seed: int = 42) -> Tuple[np.ndarray, np.ndarray]:
         """
         Run MC Dropout inference with vectorized sampling and early stopping.
 
@@ -148,6 +198,7 @@ class UncertaintyModel(BaseEstimator, ClassifierMixin):
         Args:
             X: Input features
             n_samples: Number of stochastic forward passes (overrides default)
+            seed: Random seed for deterministic predictions across UI refreshes
 
         Returns:
             Tuple of (mean_predictions, uncertainty_std)
@@ -172,6 +223,10 @@ class UncertaintyModel(BaseEstimator, ClassifierMixin):
         min_samples = max(15, n_samples // 3)
         all_preds = []
         prev_var = None
+
+        # Fix PyTorch seed for deterministic UI behavior
+        if seed is not None:
+            torch.manual_seed(seed)
 
         with torch.no_grad():
             for i in range(n_samples):
@@ -230,7 +285,17 @@ class ModelRegistry:
         try:
             import xgboost as xgb
             self.register("xgboost", lambda **kw: xgb.XGBClassifier(
-                eval_metric="logloss", random_state=42, **kw
+                eval_metric="logloss",
+                random_state=42,
+                max_depth=kw.pop('max_depth', 4),
+                n_estimators=kw.pop('n_estimators', 200),
+                subsample=kw.pop('subsample', 0.8),
+                colsample_bytree=kw.pop('colsample_bytree', 0.8),
+                reg_alpha=kw.pop('reg_alpha', 0.1),
+                reg_lambda=kw.pop('reg_lambda', 1.0),
+                min_child_weight=kw.pop('min_child_weight', 3),
+                learning_rate=kw.pop('learning_rate', 0.1),
+                **kw
             ))
         except ImportError:
             pass

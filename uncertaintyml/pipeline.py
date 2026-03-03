@@ -236,8 +236,9 @@ class UncertaintyPipeline:
         # Add Conformal Metrics
         results["conformal"] = {}
         for name, cal in self.conformal_models.items():
-            X_aligned = self._align_features(cal.estimator, X_test)
-            results["conformal"][name] = cal.evaluate(X_aligned, y_test, alpha=self.config.conformal_alpha)
+            if hasattr(cal, "mapie") and cal.mapie and hasattr(cal.mapie, "estimator"):
+                X_aligned = self._align_features(cal.mapie.estimator, X_test)
+                results["conformal"][name] = cal.evaluate(X_aligned, y_test, alpha=self.config.conformal_alpha)
 
         self.eval_results = results
         return results
@@ -302,6 +303,10 @@ class UncertaintyPipeline:
             proba = model.predict_proba(patient_data)
             risk = float(proba[0, 1]) * 100
             uncertainty = 0.0
+        elif hasattr(model, "estimator") and hasattr(model.estimator, "predict_proba"):
+             proba = model.estimator.predict_proba(patient_data)
+             risk = float(proba[0, 1]) * 100
+             uncertainty = 0.0
         else:
             pred = model.predict(patient_data)
             risk = float(pred[0]) * 100

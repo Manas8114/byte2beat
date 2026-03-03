@@ -1,0 +1,28 @@
+{
+  "Demographics": [
+    "age",
+    "gender_Male",
+    "gender_Female",
+    "ever_married_Yes",
+    "Residence_type_Urban"
+  ],
+  "Vitals & Metabolic": [
+    "avg_glucose_level",
+    "bmi"
+  ],
+  "Clinical History": [
+    "hypertension",
+    "heart_disease"
+  ],
+  "Lifestyle": [
+    "smoking_status_formerly smoked",
+    "smoking_status_never smoked",
+    "smoking_status_smokes"
+  ],
+  "Work": [
+    "work_type_Private",
+    "work_type_Self-employed",
+    "work_type_Govt_job",
+    "work_type_children"
+  ]
+}

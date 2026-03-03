@@ -4,6 +4,18 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.base import BaseEstimator, ClassifierMixin
+
+# --- CRITICAL FIX: sklearn compatibility for Python 3.13+ ---
+import sklearn.utils.validation
+if not hasattr(sklearn.utils.validation, '_is_pandas_df'):
+    try:
+        import pandas as pd
+        def _is_pandas_df(X):
+            return isinstance(X, pd.DataFrame)
+        sklearn.utils.validation._is_pandas_df = _is_pandas_df
+    except ImportError:
+        pass
+
 from tabpfn import TabPFNClassifier
 
 class MCDropoutNetwork(nn.Module):

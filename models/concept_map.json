@@ -1,0 +1,35 @@
+{
+  "Demographics": [
+    "Age",
+    "Sex_M",
+    "Sex_F",
+    "Height",
+    "Weight"
+  ],
+  "Vitals": [
+    "RestingBP",
+    "Cholesterol",
+    "FastingBS",
+    "MaxHR",
+    "Glucose"
+  ],
+  "Lifestyle": [
+    "Smoke",
+    "Alcohol",
+    "Active"
+  ],
+  "Clinical": [
+    "Oldpeak",
+    "ChestPainType_ATA",
+    "ChestPainType_NAP",
+    "ChestPainType_TA",
+    "ChestPainType_ASY",
+    "RestingECG_Normal",
+    "RestingECG_ST",
+    "RestingECG_LVH",
+    "ExerciseAngina_Y",
+    "ST_Slope_Flat",
+    "ST_Slope_Up",
+    "ST_Slope_Down"
+  ]
+}
